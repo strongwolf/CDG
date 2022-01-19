@@ -172,7 +172,7 @@ if __name__ == '__main__':
             s_loss_rcnn_cls += s_RCNN_loss_cls.mean().item()
             s_loss_rcnn_box += s_RCNN_loss_box.mean().item()
             
-            outputs = fasterRCNN(target_im_data, target_im_info, target_gt_boxes, target_num_boxes, target=True)
+            outputs = fasterRCNN(target_im_data, target_im_info, target_gt_boxes, target_num_boxes, target_norms, target=True, weighted=True)
             rois_label = outputs['roi_label']
             t_rpn_loss_cls,t_rpn_loss_box, t_RCNN_loss_cls, t_RCNN_loss_box  = outputs['dt_loss']
             t_loss = t_rpn_loss_cls.mean() + t_rpn_loss_box.mean() \
