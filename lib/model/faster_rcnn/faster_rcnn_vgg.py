@@ -28,7 +28,7 @@ class _fasterRCNN(nn.Module):
         self.grid_size = cfg.POOLING_SIZE * 2 if cfg.CROP_RESIZE_WITH_MAX_POOL else cfg.POOLING_SIZE
         self.CE= torch.nn.CrossEntropyLoss()
 
-    def forward(self, im_data, im_info, gt_boxes=None, num_boxes=None, target=False):
+    def forward(self, im_data, im_info, gt_boxes=None, num_boxes=None, norms=None, target=False, weighted=False):
         batch_size = im_data.size(0)
         outputs = dict()
         # feed image data to base model to obtain base feature map
@@ -42,7 +42,7 @@ class _fasterRCNN(nn.Module):
         outputs['dt_loss'] = [rpn_loss_cls, rpn_loss_bbox]
         rois = rois.detach()
         if self.training and gt_boxes is not None:
-                roi_data = self.RCNN_proposal_target(rois, gt_boxes, num_boxes)
+                roi_data = self.RCNN_proposal_target(rois, gt_boxes, num_boxes, norms, weighted)
                 rois, rois_label, rois_target, rois_inside_ws, rois_outside_ws, weights = roi_data
                 rois_label = rois_label.view(-1).long()
                 rois_target = rois_target.view(-1, rois_target.size(2))

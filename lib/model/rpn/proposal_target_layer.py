@@ -21,7 +21,7 @@ class _ProposalTargetLayer(nn.Module):
         self.BBOX_NORMALIZE_STDS = torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS)
         self.BBOX_INSIDE_WEIGHTS = torch.FloatTensor(cfg.TRAIN.BBOX_INSIDE_WEIGHTS)
 
-    def forward(self, all_rois, gt_boxes, num_boxes):
+    def forward(self, all_rois, gt_boxes, num_boxes, norms=None, weighted=False):
 
         self.BBOX_NORMALIZE_MEANS = self.BBOX_NORMALIZE_MEANS.type_as(gt_boxes)
         self.BBOX_NORMALIZE_STDS = self.BBOX_NORMALIZE_STDS.type_as(gt_boxes)
@@ -44,7 +44,7 @@ class _ProposalTargetLayer(nn.Module):
 
         labels, rois, bbox_targets, bbox_inside_weights, weights_batch = self._sample_rois_pytorch(
                                             all_rois, gt_boxes, fg_rois_per_image,
-                                            rois_per_image, self._num_classes)
+                                            rois_per_image, self._num_classes, norms, weighted)
 
         bbox_outside_weights = (bbox_inside_weights > 0).float()
 
@@ -110,7 +110,7 @@ class _ProposalTargetLayer(nn.Module):
 
 
     def _sample_rois_pytorch(self, all_rois, gt_boxes, fg_rois_per_image, rois_per_image, \
-            num_classes):
+            num_classes, norms=None, weighted=False):
         """Generate a random sample of RoIs comprising foreground and background
         examples.
         """
@@ -123,13 +123,18 @@ class _ProposalTargetLayer(nn.Module):
         batch_size = overlaps.size(0)
         num_proposal = overlaps.size(1)
         num_boxes_per_img = overlaps.size(2)
-
+            
         offset = torch.arange(0, batch_size)*gt_boxes.size(1)
         offset = offset.view(-1, 1).type_as(gt_assignment) + gt_assignment
 
         # changed indexing way for pytorch 1.0
         labels = gt_boxes[:,:,4].contiguous().view(-1)[(offset.view(-1),)].view(batch_size, -1)
         
+        if norms is not None:
+            norms = norms.view(-1)[(offset.view(-1),)].view(batch_size, -1)
+        if weighted:
+            weights = -cfg.THETA * (norms - cfg.MIN_RES) / (cfg.MAX_RES - cfg.MIN_RES) + 1
+            
         labels_batch = labels.new(batch_size, rois_per_image).zero_()
         rois_batch  = all_rois.new(batch_size, rois_per_image, 5).zero_()
         gt_rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()
@@ -196,6 +201,8 @@ class _ProposalTargetLayer(nn.Module):
 
             # Select sampled values from various arrays:
             labels_batch[i].copy_(labels[i][keep_inds])
+            if weighted:
+                weights_batch[i].copy_(weights[i][keep_inds])
             # Clamp labels for the background RoIs to 0
             if fg_rois_per_this_image < rois_per_image:
                 labels_batch[i][fg_rois_per_this_image:] = 0
